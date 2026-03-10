@@ -1,0 +1,5 @@
+{
+  "name": "Remix: PerformanceRSE",
+  "description": "Un chatbot con IA que analiza datos de KPIs de tiendas desde una hoja de cálculo de Google, permitiendo comparativas y consultas actualizadas.",
+  "requestFramePermissions": []
+}
