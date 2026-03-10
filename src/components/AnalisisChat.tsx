@@ -1,28 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, BarChart2 } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { GoogleGenAI, Type, FunctionDeclaration, Chat } from '@google/genai';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
 }
-
-const queryDatabaseFunction: FunctionDeclaration = {
-  name: 'queryDatabase',
-  description: 'Ejecuta una consulta SQL SELECT en la base de datos SQLite para obtener estadísticas y datos. La tabla se llama "analisis". Columnas: seccion, subseccion, tipo, referencia, tipo_2, descripcion_referencia, gama, proveedor, cifra_venta (REAL), ranking_cifra_venta (INT), prog_cv (REAL), udes_vendidas (REAL), ranking_unidades (INT), prog_unidades (REAL), margen_eur (REAL), ranking_mg (INT), prog_mg (REAL), margen_pct (REAL), num_tiendas (INT).',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      query: {
-        type: Type.STRING,
-        description: 'La consulta SQL SELECT a ejecutar. Debe ser segura y solo de lectura (SELECT). Limita los resultados a un máximo de 50 filas si es posible.',
-      },
-    },
-    required: ['query'],
-  },
-};
 
 export default function AnalisisChat() {
   const [messages, setMessages] = useState<Message[]>([
@@ -35,7 +19,6 @@ export default function AnalisisChat() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatRef = useRef<Chat | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,59 +28,38 @@ export default function AnalisisChat() {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    chatRef.current = ai.chats.create({
-      model: 'gemini-3.1-pro-preview',
-      config: {
-        systemInstruction: 'Eres un analista de datos experto en retail. Tienes acceso a una base de datos SQLite con información detallada a nivel de sección, subsección y tipo. Tu objetivo es hacer comparativas de análisis, comportamiento de mercado basados en margen, ventas (cifra_venta), unidades, y recomendar en qué merece la pena apostar. Usa la herramienta queryDatabase para consultar los datos. Siempre responde en español y usa formato Markdown. IMPORTANTE: Haz que los resultados sean muy visuales. Usa tablas Markdown siempre que sea posible. Añade indicadores visuales (emojis como 🟢, 🔴, 🟡, 📈, 📉, 🏆, ⚠️) para resaltar valores positivos, negativos o advertencias. Formatea los números de forma legible (ej. 1.234,56 € o 12,3%).',
-        tools: [{ functionDeclarations: [queryDatabaseFunction] }],
-        temperature: 0.2,
-      }
-    });
-  }, []);
+  // Gemini logic moved to server for better reliability and security
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || isLoading || !chatRef.current) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: userMessage }]);
+    
+    const newMessages: Message[] = [...messages, { id: Date.now().toString(), role: 'user', content: userMessage }];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
-      let response = await chatRef.current.sendMessage({ message: userMessage });
+      // Convert messages to history format for Gemini
+      const history = messages.filter(m => m.id !== 'init').map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+      }));
 
-      let maxCalls = 5;
-      while (response.functionCalls && response.functionCalls.length > 0 && maxCalls > 0) {
-        maxCalls--;
-        const call = response.functionCalls[0];
-        
-        if (call.name === 'queryDatabase') {
-          const query = (call.args as any).query;
-          
-          const sqlRes = await fetch('/api/sql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-          });
-          
-          const sqlData = await sqlRes.json();
-          const result = sqlData.error ? { error: sqlData.error } : sqlData.result;
-          
-          response = await chatRef.current.sendMessage({
-            message: [{
-              functionResponse: {
-                name: call.name,
-                response: { result }
-              }
-            }] as any
-          });
-        }
+      const res = await fetch('/api/analisis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMessage, history })
+      });
+
+      if (!res.ok) {
+        throw new Error('Error en la respuesta del servidor');
       }
 
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: response.text || '' }]);
+      const data = await res.json();
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: data.text || '' }]);
     } catch (err) {
       console.error(err);
       setMessages(prev => [...prev, { 
