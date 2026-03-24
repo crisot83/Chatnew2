@@ -160,7 +160,7 @@ export default function App() {
             }`}
           >
             <BarChart2 className="w-4 h-4" />
-            Análisis 2025
+            Análisis_2025
           </button>
         </div>
       </header>
