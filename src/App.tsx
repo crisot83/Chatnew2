@@ -149,7 +149,7 @@ export default function App() {
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            Estado de la región
+            Estado de la región 2025
           </button>
           <button
             onClick={() => setActiveTab('analisis')}
@@ -160,7 +160,7 @@ export default function App() {
             }`}
           >
             <BarChart2 className="w-4 h-4" />
-            Análisis
+            Análisis 2025
           </button>
         </div>
       </header>
