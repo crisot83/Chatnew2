@@ -149,7 +149,7 @@ export default function App() {
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            Performance RSE
+            Estado de la región
           </button>
           <button
             onClick={() => setActiveTab('analisis')}
